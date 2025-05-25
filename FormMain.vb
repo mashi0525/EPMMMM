@@ -7,7 +7,9 @@ Public Class FormMain
     Private WithEvents TimerShow As New Timer
 
     Private Sub FormMain_Load(sender As Object, e As EventArgs) Handles MyBase.Load
-        pnlFilter.Left = Me.Width 
+        HelperNavigation.RegisterNewForm(Me)
+
+        pnlFilter.Left = Me.Width
         pnlFilter.Visible = False
 
         TimerHide.Interval = 5
@@ -126,7 +128,12 @@ Public Class FormMain
 
 
     Private Sub LoadSearchResults()
-        Dim query As String = "SELECT * FROM eventplace WHERE 1=1"
+        Dim query As String = "SELECT eventplace.*, " &
+                      "CASE WHEN (SELECT COUNT(*) FROM bookings b " &
+                      "       WHERE b.place_id = eventplace.place_id AND b.status='Approved') > 0 " &
+                      "THEN 'Booked' ELSE 'Available' END AS status " &
+                      "FROM eventplace WHERE 1=1"
+
 
         Dim selectedDays As New List(Of String)
         For Each selectedItem As String In clbAvailableOn.CheckedItems
@@ -216,7 +223,10 @@ Public Class FormMain
         End Using
 
         flpResults.Controls.Clear()
-        HelperResultsDisplay.PopulateResults(flpResults, dt, AddressOf btnBook_Click)
+        HelperResultsDisplay.PopulateEventPlaces(flpResults, dt, AddressOf btnBook_Click, Nothing, Nothing, False)
+
+
+
     End Sub
 
     Private customerId As Integer = -1
@@ -291,8 +301,6 @@ Public Class FormMain
         Me.Hide()
     End Sub
 
-
-
     Private Sub btnSignUp_Click(sender As Object, e As EventArgs) Handles btnSignUp.Click
         Dim signUpForm As New FormSignUp()
         signUpForm.Show()
@@ -300,15 +308,22 @@ Public Class FormMain
     End Sub
     Private Sub btnLogIn_Click(sender As Object, e As EventArgs) Handles btnLogIn.Click
         Dim loginForm As New FormLogIn()
-        loginForm.ShowDialog()
-
-
-        If CurrentUser.CustomerId > 0 Then
-            UpdatePanelVisibility()
-            pnlAccount.Visible = True
-            pnlSignUpLogIn.Visible = False
-            Me.Refresh()
-            Application.DoEvents()
+        If loginForm.ShowDialog() = DialogResult.OK Then
+            ' For Admins, open the Admin Center and hide FormMain.
+            If CurrentUser.Role = "Admin" Then
+                Dim adminForm As New FormAdminCenter()
+                adminForm.Show()
+                Me.Hide()
+            ElseIf CurrentUser.CustomerId > 0 Then
+                ' For Users, update the UI to reflect the logged-in state.
+                UpdatePanelVisibility()
+                pnlAccount.Visible = True
+                pnlSignUpLogIn.Visible = False
+                Me.Refresh()
+                Application.DoEvents()
+            Else
+                MessageBox.Show("Login failed or customer not found.", "Login Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
+            End If
         Else
             MessageBox.Show("Login failed or customer not found.", "Login Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
         End If
@@ -331,9 +346,12 @@ Public Class FormMain
 
     Private Sub btnSearch_Click(sender As Object, e As EventArgs) Handles btnSearch.Click
         Dim searchText As String = txtSearch.Text.Trim()
+        Dim query As String = "SELECT eventplace.*, " &
+                      "CASE WHEN (SELECT COUNT(*) FROM bookings b " &
+                      "       WHERE b.place_id = eventplace.place_id AND b.status='Approved') > 0 " &
+                      "THEN 'Booked' ELSE 'Available' END AS status " &
+                      "FROM eventplace WHERE event_place LIKE @search OR event_type LIKE @search"
 
-
-        Dim query As String = "SELECT * FROM eventplace WHERE event_place LIKE @search OR event_type LIKE @search"
 
         Dim dt As New DataTable()
         Using connection As MySqlConnection = DBHelper.GetConnection()
@@ -352,7 +370,10 @@ Public Class FormMain
         End Using
 
         flpResults.Controls.Clear()
-        HelperResultsDisplay.PopulateResults(flpResults, dt, AddressOf btnBook_Click)
+
+        HelperResultsDisplay.PopulateEventPlaces(flpResults, dt, AddressOf btnBook_Click, Nothing, Nothing, False)
+
+
     End Sub
 
     Private Sub txtSearch_KeyDown(sender As Object, e As KeyEventArgs) Handles txtSearch.KeyDown
@@ -419,18 +440,6 @@ Public Class FormMain
     End Sub
 
 
-    Private Sub PopulateComboBoxes()
-        cbSort.Items.Clear()
-        cbSort.Items.Add("Select...")
-        cbSort.Items.AddRange(New String() {
-        "Alphabetical (A-Z)", "Alphabetical (Z-A)",
-        "Capacity (Lowest to Highest)", "Capacity (Highest to Lowest)",
-        "Price (Lowest to Highest)", "Price (Highest to Lowest)"
-    })
-
-        cbSort.SelectedIndex = 0
-    End Sub
-
 
     Private Sub cbSort_SelectedIndexChanged(sender As Object, e As EventArgs) Handles cbSort.SelectedIndexChanged
         If cbSort.SelectedItem IsNot Nothing AndAlso cbSort.SelectedItem.ToString() <> "Select..." Then
@@ -446,5 +455,6 @@ Public Class FormMain
     Private Sub btnNext_Click(sender As Object, e As EventArgs) Handles btnNext.Click
         HelperNavigation.GoNext(Me)
     End Sub
+
 
 End Class

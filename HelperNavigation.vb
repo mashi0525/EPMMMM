@@ -1,15 +1,16 @@
 ﻿Module HelperNavigation
     Private backStack As New Stack(Of Form)
     Private forwardStack As New Stack(Of Form)
+    Private lastForm As Form = Nothing
 
-    Public Sub OpenForm(newForm As Form, currentForm As Form)
-        backStack.Push(currentForm)
-        forwardStack.Clear()
+    Public Sub RegisterNewForm(currentForm As Form)
+        If lastForm IsNot Nothing Then
+            backStack.Push(lastForm)
+            forwardStack.Clear()
+        End If
 
-        newForm.Show()
-        currentForm.Hide()
-
-        UpdateButtons(newForm)
+        lastForm = currentForm
+        UpdateButtons(currentForm)
     End Sub
 
     Public Sub GoBack(currentForm As Form)
@@ -17,12 +18,21 @@
             Dim previousForm As Form = backStack.Pop()
             forwardStack.Push(currentForm)
 
+            If previousForm.WindowState = FormWindowState.Minimized Then
+                previousForm.WindowState = FormWindowState.Normal
+            End If
+
             previousForm.Show()
+            previousForm.BringToFront()
+            previousForm.Activate()
+
             currentForm.Hide()
 
+            lastForm = previousForm
             UpdateButtons(previousForm)
         End If
     End Sub
+
 
     Public Sub GoNext(currentForm As Form)
         If forwardStack.Count > 0 Then
@@ -32,6 +42,7 @@
             nextForm.Show()
             currentForm.Hide()
 
+            lastForm = nextForm
             UpdateButtons(nextForm)
         End If
     End Sub
